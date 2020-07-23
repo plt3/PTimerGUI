@@ -1,6 +1,7 @@
 import tkinter as tk
 import random
 from datetime import datetime
+from functools import partial
 from sqlalchemy import create_engine, Column, Float, Integer, DateTime, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -17,10 +18,68 @@ class TimeModel(Base):
     time = Column(Float, nullable=False)
     scramble = Column(String(60), nullable=False)
     date = Column(DateTime, nullable=False)
+    penalty = Column(String(4), default='OK')
+
+
+class Edit:
+    def __init__(self, master, labText):
+        self.master = master
+        self.master.geometry('550x260')
+        self.master.title('Add Penalty')
+
+        self.timeId = int(labText[:labText.index(':')])
+        self.timeObj = session.query(TimeModel).filter_by(id=self.timeId).first()
+
+        self.idLab = tk.Label(self.master, text=f'Solve {self.timeObj.id}:', font=('TkDefaultFont', 18))
+        self.idLab.pack(pady=(10, 0))
+        self.timeLab = tk.Label(self.master, text=Timer.niceTime(self.timeObj.time, Timer.precision, penalty=self.timeObj.penalty, dnfTime=True), font=('TkDefaultFont', 30), pady=20)
+        self.timeLab.pack()  # make this show +2 or DNF depending on self.timeObj.penalty (add some other args to Timer.niceTime())
+        self.scramLab = tk.Label(self.master, text=f'Scramble: {self.timeObj.scramble}', font=('TkDefaultFont', 18))
+        self.scramLab.pack()
+        niceDate = self.timeObj.date.strftime('%m-%d-%Y %H:%M:%S')
+        self.dateLab = tk.Label(self.master, text=f'Date: {niceDate}', font=('TkDefaultFont', 18))
+        self.dateLab.pack(pady=(10, 0))
+
+        self.penaltyFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
+        self.penaltyLab = tk.Label(self.penaltyFrame, text='Penalty:', font=('TkDefaultFont', 18), padx=10, pady=10)
+        self.penaltyLab.grid(row=0, column=0)
+
+        for index, penalty in enumerate(['OK', '+2', 'DNF']):
+            penLab = tk.Label(self.penaltyFrame, text=penalty, font=('TkDefaultFont', 18), padx=5, pady=5)
+            if penalty == self.timeObj.penalty:
+                penLab.configure(background='light gray')
+                penLab.bind('<Enter>', partial(Timer.changeBackground, static=True))
+                penLab.bind('<Leave>', partial(Timer.changeBackground, static=True))
+            else:
+                penLab.bind('<Enter>', Timer.changeBackground)
+                penLab.bind('<Leave>', Timer.changeBackground)
+
+            penLab.bind('<Button-1>', self.editTime)
+            penLab.grid(row=0, column=index + 1, sticky=tk.N + tk.S)  # add a button to delete the solve
+
+        self.penaltyFrame.pack(pady=(10, 0))
+
+    def editTime(self, event):
+        for widget in self.penaltyFrame.grid_slaves():
+            if widget['text'] != 'Penalty:':
+                widget.configure(background='White')
+                widget.bind('<Enter>', Timer.changeBackground)
+                widget.bind('<Leave>', Timer.changeBackground)
+
+        event.widget.configure(background='light gray')
+        event.widget.bind('<Enter>', partial(Timer.changeBackground, static=True))
+        event.widget.bind('<Leave>', partial(Timer.changeBackground, static=True))
+
+        self.timeObj.penalty = event.widget['text']
+        session.commit()
+        # the label change lags a little bit if you don't click the physical mouse but ehhhhhh
+        self.timeLab.configure(text=Timer.niceTime(self.timeObj.time, Timer.precision, penalty=self.timeObj.penalty, dnfTime=True))
+        Timer.refreshTimes()
 
 
 class Timer:
     timesLabs = []
+    timeLabel = ''
     opposites = {'U': 'D', 'F': 'B', 'L': 'R', 'D': 'U', 'B': 'F', 'R': 'L'}
     moveslist = [a + b for a in ['U', 'D', 'F', 'B', 'L', 'R'] for b in ['', "'", '2']]
     scram = ''
@@ -40,8 +99,8 @@ class Timer:
                                  borderwidth=1, relief='solid', padx=10, pady=10, width=40)
         self.scramLab.grid(row=0, column=1, pady=20)
         zeros = ''.join(['0' for i in range(Timer.precision)])
-        self.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 50))
-        self.timeLabel.grid(row=1, column=1, pady=20)
+        Timer.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 50))
+        Timer.timeLabel.grid(row=1, column=1, pady=20)
 
         self.timesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
         self.timesTitle = tk.Label(self.timesFrame, text='Times:', font=('TkDefaultFont', 18))
@@ -50,15 +109,33 @@ class Timer:
         rawLast = session.query(TimeModel).order_by(TimeModel.id.desc())
 
         for index, timeObj in enumerate(rawLast.limit(10).all()):  # this list does not work when there are < 10 times in the database
-            timeLab = tk.Label(self.timesFrame, text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision)}')
+            timeLab = tk.Label(self.timesFrame, text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision, penalty=timeObj.penalty)}')
             timeLab.bind('<Button-1>', self.editTime)
-            timeLab.grid(row=index + 1, column=0)
+            timeLab.bind('<Enter>', Timer.changeBackground)
+            timeLab.bind('<Leave>', Timer.changeBackground)
+            timeLab.grid(row=index + 1, column=0, sticky=tk.W + tk.E)
             Timer.timesLabs.append(timeLab)
 
         self.timesFrame.grid(row=1, column=0)
 
     def editTime(self, event):
-        print(event.widget['text'])  # open up some sort of popup to edit penalty, etc.
+        self.editWindow = tk.Toplevel(self.master)
+        self.editApp = Edit(self.editWindow, event.widget['text'])
+
+    @staticmethod
+    def refreshTimes():
+        rawLast = session.query(TimeModel).order_by(TimeModel.id.desc()).limit(10).all()
+        Timer.timeLabel.configure(text=Timer.niceTime(rawLast[0].time, precision=Timer.precision, penalty=rawLast[0].penalty))
+        for timeObj, timeLab in zip(rawLast, Timer.timesLabs):
+            timeLab.configure(text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, precision=Timer.precision, penalty=timeObj.penalty)}')
+
+    @staticmethod
+    def changeBackground(event, static=False):  # highlight time cell when mouse is over it
+        if not static:
+            if event.widget['background'] == 'White':
+                event.widget.configure(background='light gray')
+            else:
+                event.widget.configure(background='White')
 
     def openOptions(self):
         pass  # but like probably open up different window (so different class)
@@ -96,7 +173,12 @@ class Timer:
             oldText = prevText
 
     @staticmethod
-    def niceTime(secs, precision):
+    def niceTime(secs, precision, penalty='OK', dnfTime=False):
+        if penalty == 'DNF' and not dnfTime:
+            return 'DNF'
+        elif penalty == '+2':
+            secs += 2
+
         rawHours, remainder = divmod(int(secs), 3600)
         rawMins, wholeSeconds = divmod(remainder, 60)
         rawSecs = round(wholeSeconds + (secs - int(secs)), precision)
@@ -119,10 +201,16 @@ class Timer:
 
         try:
             missing = joinedStr[joinedStr.index('.') + 1:]
+            donestr = joinedStr + ''.join(endZeros[len(missing):])
         except ValueError:
-            return joinedStr + '.' + ''.join(endZeros)
+            donestr = joinedStr + '.' + ''.join(endZeros)
 
-        return joinedStr + ''.join(endZeros[len(missing):])
+        if penalty == '+2':
+            return donestr + '+'
+        elif penalty == 'DNF':
+            return f'DNF({donestr})'
+        else:
+            return donestr
 
     def timeIt(self, *event):
         if not Timer.running:
@@ -135,11 +223,11 @@ class Timer:
             timeFloat = elapsed.seconds + elapsed.microseconds / 1000000
 
             if not event:  # for time to update itself during timing
-                self.timeLabel.configure(text=Timer.niceTime(timeFloat, Timer.precision))
+                Timer.timeLabel.configure(text=Timer.niceTime(timeFloat, Timer.precision))
                 self.master.after(10, self.timeIt)
             else:  # to stop timer
                 Timer.solveFloat = timeFloat
-                self.timeLabel.configure(text=Timer.niceTime(Timer.solveFloat, Timer.precision))
+                Timer.timeLabel.configure(text=Timer.niceTime(Timer.solveFloat, Timer.precision))
                 Timer.running = False
                 self.addTime()
                 self.makeScramble()

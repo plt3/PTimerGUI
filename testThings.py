@@ -93,7 +93,3 @@ class FloatTime:
             return joinedStr + '.' + ''.join(endZeros)
 
         return joinedStr + ''.join(endZeros[len(missing):])
-
-
-a = FloatTime(0.0005)
-print(a.niceTime(7))
