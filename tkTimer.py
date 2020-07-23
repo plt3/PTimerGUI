@@ -19,14 +19,15 @@ class TimeModel(Base):
     date = Column(DateTime, nullable=False)
 
 
-class Timer:  # figure out key release
+class Timer:
     timesLabs = []
     opposites = {'U': 'D', 'F': 'B', 'L': 'R', 'D': 'U', 'B': 'F', 'R': 'L'}
     moveslist = [a + b for a in ['U', 'D', 'F', 'B', 'L', 'R'] for b in ['', "'", '2']]
     scram = ''
     solveStart = 0
-    stop = 0
+    solveFloat = 0
     running = False
+    precision = 2  # anything greater than 6 makes no sense because microseconds
 
     def __init__(self, master):
         self.master = master
@@ -38,7 +39,8 @@ class Timer:  # figure out key release
         self.scramLab = tk.Label(self.master, text=Timer.scram, font=('TkDefaultFont', 18),
                                  borderwidth=1, relief='solid', padx=10, pady=10, width=40)
         self.scramLab.grid(row=0, column=1, pady=20)
-        self.timeLabel = tk.Label(self.master, text='0.00', font=('TkDefaultFont', 50))
+        zeros = ''.join(['0' for i in range(Timer.precision)])
+        self.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 50))
         self.timeLabel.grid(row=1, column=1, pady=20)
 
         self.timesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
@@ -48,7 +50,7 @@ class Timer:  # figure out key release
         rawLast = session.query(TimeModel).order_by(TimeModel.id.desc())
 
         for index, timeObj in enumerate(rawLast.limit(10).all()):  # this list does not work when there are < 10 times in the database
-            timeLab = tk.Label(self.timesFrame, text=f'{timeObj.id}: {timeObj.time}')
+            timeLab = tk.Label(self.timesFrame, text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision)}')
             timeLab.bind('<Button-1>', self.editTime)
             timeLab.grid(row=index + 1, column=0)
             Timer.timesLabs.append(timeLab)
@@ -67,7 +69,7 @@ class Timer:  # figure out key release
         prevchoice = 'Z'
         oldchoice = 'X'
         while True:
-            choice = random.choice(Timer.moveslist)
+            choice = random.choice(Timer.moveslist)  # MAKE THIS A STATIC METHOD DUMMY BOYYYYYYYYYYYYYYYYYYYY (maybe?)
             if i == 20:
                 break
             elif choice[0] == prevchoice[0]:
@@ -82,17 +84,45 @@ class Timer:  # figure out key release
         Timer.scram = scramble.rstrip()
 
     def addTime(self):
-        doneTime = float(self.timeLabel['text'])  # update last 10 times label
-        timeObj = TimeModel(time=doneTime, scramble=Timer.scram, date=Timer.solveStart)  # add time to database
+        timeObj = TimeModel(time=Timer.solveFloat, scramble=Timer.scram, date=Timer.solveStart)  # add time to database
         session.add(timeObj)
         session.commit()
 
-        oldText = f'{timeObj.id}: {doneTime}'
+        oldText = f'{timeObj.id}: {Timer.niceTime(Timer.solveFloat, Timer.precision)}'
 
         for label in Timer.timesLabs:  # update the labels saying the times
             prevText = label['text']
             label.configure(text=oldText)
             oldText = prevText
+
+    @staticmethod
+    def niceTime(secs, precision):
+        rawHours, remainder = divmod(int(secs), 3600)
+        rawMins, wholeSeconds = divmod(remainder, 60)
+        rawSecs = round(wholeSeconds + (secs - int(secs)), precision)
+
+        strList = []
+
+        for index, num in enumerate([rawHours, rawMins, rawSecs]):
+            if num or index == 2:
+                if num < 10:
+                    strList.append(f'0{num}')
+                else:
+                    strList.append(str(num))
+
+        if len(strList) == 1 and rawSecs < 1:
+            joinedStr = ':'.join(strList)[1:]
+        else:
+            joinedStr = ':'.join(strList).lstrip('0')
+
+        endZeros = ['0' for i in range(precision)]
+
+        try:
+            missing = joinedStr[joinedStr.index('.') + 1:]
+        except ValueError:
+            return joinedStr + '.' + ''.join(endZeros)
+
+        return joinedStr + ''.join(endZeros[len(missing):])
 
     def timeIt(self, *event):
         if not Timer.running:
@@ -101,11 +131,15 @@ class Timer:  # figure out key release
                 Timer.running = True
                 self.master.after(10, self.timeIt)
         else:
+            elapsed = datetime.now() - Timer.solveStart
+            timeFloat = elapsed.seconds + elapsed.microseconds / 1000000
+
             if not event:  # for time to update itself during timing
-                elapsed = str(datetime.now() - Timer.solveStart)
-                self.timeLabel.configure(text=elapsed[5:-4])
+                self.timeLabel.configure(text=Timer.niceTime(timeFloat, Timer.precision))
                 self.master.after(10, self.timeIt)
             else:  # to stop timer
+                Timer.solveFloat = timeFloat
+                self.timeLabel.configure(text=Timer.niceTime(Timer.solveFloat, Timer.precision))
                 Timer.running = False
                 self.addTime()
                 self.makeScramble()

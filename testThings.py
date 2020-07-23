@@ -59,4 +59,41 @@ def main():
     root.mainloop()
 
 
-main()
+# main()
+
+
+class FloatTime:
+    def __init__(self, time):
+        self.time = time
+
+    def niceTime(self, precision=5):
+        rawHours, remainder = divmod(int(self.time), 3600)
+        rawMins, wholeSeconds = divmod(remainder, 60)
+        rawSecs = round(wholeSeconds + (self.time - int(self.time)), precision)
+
+        strList = []
+
+        for index, num in enumerate([rawHours, rawMins, rawSecs]):
+            if num or index == 2:
+                if num < 10:
+                    strList.append(f'0{num}')
+                else:
+                    strList.append(str(num))
+
+        if len(strList) == 1 and rawSecs < 1:
+            joinedStr = ':'.join(strList)[1:]
+        else:
+            joinedStr = ':'.join(strList).lstrip('0')
+
+        endZeros = ['0' for i in range(precision)]
+
+        try:
+            missing = joinedStr[joinedStr.index('.') + 1:]
+        except ValueError:
+            return joinedStr + '.' + ''.join(endZeros)
+
+        return joinedStr + ''.join(endZeros[len(missing):])
+
+
+a = FloatTime(0.0005)
+print(a.niceTime(7))
