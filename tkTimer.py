@@ -114,7 +114,7 @@ class Timer:
     solveStart = 0
     solveFloat = 0
     running = False
-    precision = 2  # anything greater than 6 makes no sense because microseconds
+    precision = 3  # anything greater than 6 makes no sense because microseconds
 
     def __init__(self, master):
         self.master = master
@@ -163,7 +163,8 @@ class Timer:
     @staticmethod
     def refreshTimes():
         rawLast = session.query(TimeModel).order_by(TimeModel.id.desc()).limit(10).all()
-        if Timer.timeLabel['text'] != '0.00':
+        zeros = ''.join(['0' for i in range(Timer.precision)])
+        if Timer.timeLabel['text'] != f'0.{zeros}':
             Timer.timeLabel.configure(text=Timer.niceTime(rawLast[0].time, precision=Timer.precision, penalty=rawLast[0].penalty))
         for timeObj, timeLab in zip(rawLast, Timer.timesLabs):
             timeLab.configure(text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, precision=Timer.precision, penalty=timeObj.penalty)}')
@@ -210,6 +211,7 @@ class Timer:
         pass  # but like probably open up different window (so different class)
         # make these choices register in the db so that they are saved from session to session
         # number precision, amount of times to show, color theme, timer font, which averages to display
+        # export to/import from csv (or even to/from cstimer export)
 
     def makeScramble(self):  # generate random move 3x3 scramble
         opposites = {'U': 'D', 'F': 'B', 'L': 'R', 'D': 'U', 'B': 'F', 'R': 'L'}
@@ -239,7 +241,7 @@ class Timer:
         session.commit()
 
         if len(Timer.timesLabs) < 10:  # dynamically add labels if < 10 times in the database
-            timeLab = tk.Label(self.timesFrame)
+            timeLab = tk.Label(self.timesFrame, text='', font=('TkDefaultFont', 18), padx=3, pady=3)
             timeLab.bind('<Button-1>', self.editTime)
             timeLab.bind('<Enter>', Timer.changeBackground)
             timeLab.bind('<Leave>', Timer.changeBackground)
