@@ -86,6 +86,7 @@ class Edit:
                 del Timer.timesLabs[-1]
 
             Timer.refreshTimes()
+            Timer.refreshAverages()
 
     def editTime(self, event):
         for widget in self.penaltyFrame.grid_slaves():
@@ -103,13 +104,12 @@ class Edit:
         # the label change lags a little bit if you don't click the physical mouse but ehhhhhh
         self.timeLab.configure(text=Timer.niceTime(self.timeObj.time, Timer.precision, penalty=self.timeObj.penalty, dnfTime=True))
         Timer.refreshTimes()
+        Timer.refreshAverages()
 
 
 class Timer:
     timesLabs = []
     timeLabel = ''
-    opposites = {'U': 'D', 'F': 'B', 'L': 'R', 'D': 'U', 'B': 'F', 'R': 'L'}
-    moveslist = [a + b for a in ['U', 'D', 'F', 'B', 'L', 'R'] for b in ['', "'", '2']]
     scram = ''
     solveStart = 0
     solveFloat = 0
@@ -123,21 +123,21 @@ class Timer:
                                  font=('TkDefaultFont', 18), padx=10, pady=10)
         self.optsBut.grid(row=0, column=0, padx=20, pady=20)
         self.makeScramble()
-        self.scramLab = tk.Label(self.master, text=Timer.scram, font=('TkDefaultFont', 18),
+        self.scramLab = tk.Label(self.master, text=Timer.scram, font=('TkDefaultFont', 24),
                                  borderwidth=1, relief='solid', padx=10, pady=10, width=40)
         self.scramLab.grid(row=0, column=1, pady=20)
         zeros = ''.join(['0' for i in range(Timer.precision)])
-        Timer.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 50))
+        Timer.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 70))
         Timer.timeLabel.grid(row=1, column=1, pady=20)
 
         self.timesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
-        self.timesTitle = tk.Label(self.timesFrame, text='Times:', font=('TkDefaultFont', 18))
+        self.timesTitle = tk.Label(self.timesFrame, text='Times:', font=('TkDefaultFont', 24), pady=3)
         self.timesTitle.grid(row=0, column=0)
 
         rawLast = session.query(TimeModel).order_by(TimeModel.id.desc())
 
         for index, timeObj in enumerate(rawLast.limit(10).all()):
-            timeLab = tk.Label(self.timesFrame, text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision, penalty=timeObj.penalty)}')
+            timeLab = tk.Label(self.timesFrame, text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision, penalty=timeObj.penalty)}', font=('TkDefaultFont', 18), padx=3, pady=3)
             timeLab.bind('<Button-1>', self.editTime)
             timeLab.bind('<Enter>', Timer.changeBackground)
             timeLab.bind('<Leave>', Timer.changeBackground)
@@ -145,6 +145,16 @@ class Timer:
             Timer.timesLabs.append(timeLab)
 
         self.timesFrame.grid(row=1, column=0)
+
+        self.averagesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
+
+        Timer.mo3Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24))
+        Timer.mo3Lab.pack(padx=6, pady=(6, 3))
+        Timer.ao5Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24))
+        Timer.ao5Lab.pack(padx=6, pady=(3, 6))
+
+        Timer.refreshAverages()
+        self.averagesFrame.grid(row=2, column=1)
 
     def editTime(self, event):
         self.editWindow = tk.Toplevel(self.master)
@@ -159,6 +169,36 @@ class Timer:
             timeLab.configure(text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, precision=Timer.precision, penalty=timeObj.penalty)}')
 
     @staticmethod
+    def refreshAverages():
+        lastFiveTimes = session.query(TimeModel).order_by(TimeModel.id.desc()).limit(5).all()
+
+        ao5Times = []
+
+        for object in lastFiveTimes:
+            if object.penalty == 'DNF':
+                ao5Times.append('DNF')
+            elif object.penalty == '+2':
+                ao5Times.append(object.time + 2)
+            else:
+                ao5Times.append(object.time)
+
+        mo3Times = ao5Times[:3]
+        ao5Times.sort(key=lambda v: (isinstance(v, str), v))
+        realAo5Times = ao5Times[1:4]
+
+        for average, times, label in [('mo3', mo3Times, Timer.mo3Lab), ('ao5', realAo5Times, Timer.ao5Lab)]:
+            try:
+                avg = Timer.niceTime(sum(times) / 3, Timer.precision)
+                label.configure(text=f'{average}: {avg}')
+            except TypeError:
+                label.configure(text=f'{average}: DNF')
+
+        if len(lastFiveTimes) < 5:
+            Timer.ao5Lab.configure(text='ao5: -')
+            if len(lastFiveTimes) < 3:
+                Timer.mo3Lab.configure(text='mo3: -')
+
+    @staticmethod
     def changeBackground(event, static=False):  # highlight time cell when mouse is over it
         if not static:
             if event.widget['background'] == 'White':
@@ -169,20 +209,22 @@ class Timer:
     def openOptions(self):  # let this control how many times to show in the list?
         pass  # but like probably open up different window (so different class)
         # make these choices register in the db so that they are saved from session to session
-        # number precision, amount of times to show, color theme, timer font
+        # number precision, amount of times to show, color theme, timer font, which averages to display
 
     def makeScramble(self):  # generate random move 3x3 scramble
+        opposites = {'U': 'D', 'F': 'B', 'L': 'R', 'D': 'U', 'B': 'F', 'R': 'L'}
+        moveslist = [a + b for a in ['U', 'D', 'F', 'B', 'L', 'R'] for b in ['', "'", '2']]
         scramble = ''
         i = 0
         prevchoice = 'Z'
         oldchoice = 'X'
         while True:
-            choice = random.choice(Timer.moveslist)
+            choice = random.choice(moveslist)
             if i == 20:
                 break
             elif choice[0] == prevchoice[0]:
                 continue
-            elif Timer.opposites[choice[0]] == prevchoice[0] and choice[0] == oldchoice[0]:
+            elif opposites[choice[0]] == prevchoice[0] and choice[0] == oldchoice[0]:
                 continue
             scramble += choice + ' '
             i += 1
@@ -210,6 +252,8 @@ class Timer:
             prevText = label['text']
             label.configure(text=oldText)
             oldText = prevText
+
+        Timer.refreshAverages()
 
     @staticmethod
     def niceTime(secs, precision, penalty='OK', dnfTime=False):
@@ -275,7 +319,7 @@ class Timer:
 
 def main():  # do something to create the times table if it is first time running the program
     root = tk.Tk()  # maybe like try open('solveTimes.db') before the sqlite connect or something
-    root.geometry('700x700')
+    root.geometry('800x700')
     root.title('PTimer GUI')
     Timer(root)
     root.mainloop()
