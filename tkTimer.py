@@ -81,9 +81,8 @@ class Edit:
             if not aboveTimes:
                 Timer.timeLabel.configure(text='0.00')
 
-            if len(session.query(TimeModel).all()) < 10:  # shrink times list if < 10 times in the database
-                Timer.timesLabs[-1].destroy()
-                del Timer.timesLabs[-1]
+            Timer.timesLabs[-1].destroy()  # shrink the times list
+            del Timer.timesLabs[-1]
 
             Timer.refreshTimes()
             Timer.refreshAverages()
@@ -114,7 +113,7 @@ class Timer:
     solveStart = 0
     solveFloat = 0
     running = False
-    precision = 3  # anything greater than 6 makes no sense because microseconds
+    precision = 2  # anything greater than 6 makes no sense because microseconds
 
     def __init__(self, master):
         self.master = master
@@ -130,21 +129,40 @@ class Timer:
         Timer.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 70))
         Timer.timeLabel.grid(row=1, column=1, pady=20)
 
-        self.timesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
-        self.timesTitle = tk.Label(self.timesFrame, text='Times:', font=('TkDefaultFont', 24), pady=3)
-        self.timesTitle.grid(row=0, column=0)
+        self.bigTimesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
 
-        rawLast = session.query(TimeModel).order_by(TimeModel.id.desc())
+        self.timesTitle = tk.Label(self.bigTimesFrame, text='Times:', font=('TkDefaultFont', 24), pady=3)
+        self.timesTitle.pack()
 
-        for index, timeObj in enumerate(rawLast.limit(10).all()):
-            timeLab = tk.Label(self.timesFrame, text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision, penalty=timeObj.penalty)}', font=('TkDefaultFont', 18), padx=3, pady=3)
+        Timer.timesCanvas = tk.Canvas(self.bigTimesFrame, borderwidth=0, height=330)  # good height to hold 10 times
+        self.timesFrame = tk.Frame(Timer.timesCanvas)
+        self.vsb = tk.Scrollbar(self.bigTimesFrame, orient='vertical', command=Timer.timesCanvas.yview)
+        Timer.timesCanvas.configure(yscrollcommand=self.vsb.set)
+
+        self.vsb.pack(side='right', fill='y')
+        Timer.timesCanvas.pack()
+        Timer.timesCanvas.create_window((0, 0), window=self.timesFrame, anchor='nw', tags='self.timesFrame')
+
+        self.timesFrame.bind('<Configure>', self.onFrameConfigure)
+
+        rawLast = session.query(TimeModel).order_by(TimeModel.id.desc()).all()
+        maxChars = 8  # good start to have 'times' label fit well
+
+        for index, timeObj in enumerate(rawLast):
+            labText = f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision, penalty=timeObj.penalty)}'
+            timeLab = tk.Label(self.timesFrame, text=labText, font=('TkDefaultFont', 18), padx=3, pady=3)
             timeLab.bind('<Button-1>', self.editTime)
             timeLab.bind('<Enter>', Timer.changeBackground)
             timeLab.bind('<Leave>', Timer.changeBackground)
             timeLab.grid(row=index + 1, column=0, sticky=tk.W + tk.E)
             Timer.timesLabs.append(timeLab)
 
-        self.timesFrame.grid(row=1, column=0)
+            if len(labText) > maxChars:
+                maxChars = len(labText)
+
+        Timer.timesCanvas.configure(width=maxChars * 10)  # this is a good estimate for the width of the canvas
+
+        self.bigTimesFrame.grid(row=1, column=0, padx=(10, 0))
 
         self.averagesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
 
@@ -156,18 +174,30 @@ class Timer:
         Timer.refreshAverages()
         self.averagesFrame.grid(row=2, column=1)
 
+    def onFrameConfigure(self, event):
+        Timer.timesCanvas.configure(scrollregion=Timer.timesCanvas.bbox('all'))
+
     def editTime(self, event):
         self.editWindow = tk.Toplevel(self.master)
         self.editApp = Edit(self.editWindow, event.widget['text'])
 
     @staticmethod
     def refreshTimes():
-        rawLast = session.query(TimeModel).order_by(TimeModel.id.desc()).limit(10).all()
+        rawLast = session.query(TimeModel).order_by(TimeModel.id.desc()).all()
         zeros = ''.join(['0' for i in range(Timer.precision)])
         if Timer.timeLabel['text'] != f'0.{zeros}':
             Timer.timeLabel.configure(text=Timer.niceTime(rawLast[0].time, precision=Timer.precision, penalty=rawLast[0].penalty))
+
+        maxChars = 8
+
         for timeObj, timeLab in zip(rawLast, Timer.timesLabs):
-            timeLab.configure(text=f'{timeObj.id}: {Timer.niceTime(timeObj.time, precision=Timer.precision, penalty=timeObj.penalty)}')
+            labText = f'{timeObj.id}: {Timer.niceTime(timeObj.time, precision=Timer.precision, penalty=timeObj.penalty)}'
+            timeLab.configure(text=labText)
+
+            if len(labText) > maxChars:
+                maxChars = len(labText)
+
+        Timer.timesCanvas.configure(width=maxChars * 10)
 
     @staticmethod
     def refreshAverages():
@@ -207,10 +237,10 @@ class Timer:
             else:
                 event.widget.configure(background='White')
 
-    def openOptions(self):  # let this control how many times to show in the list?
+    def openOptions(self):
         pass  # but like probably open up different window (so different class)
         # make these choices register in the db so that they are saved from session to session
-        # number precision, amount of times to show, color theme, timer font, which averages to display
+        # number precision, color theme, timer font, which averages to display
         # export to/import from csv (or even to/from cstimer export)
 
     def makeScramble(self):  # generate random move 3x3 scramble
@@ -240,20 +270,26 @@ class Timer:
         session.add(timeObj)  # add time to database
         session.commit()
 
-        if len(Timer.timesLabs) < 10:  # dynamically add labels if < 10 times in the database
-            timeLab = tk.Label(self.timesFrame, text='', font=('TkDefaultFont', 18), padx=3, pady=3)
-            timeLab.bind('<Button-1>', self.editTime)
-            timeLab.bind('<Enter>', Timer.changeBackground)
-            timeLab.bind('<Leave>', Timer.changeBackground)
-            timeLab.grid(row=len(Timer.timesLabs) + 1, column=0, sticky=tk.W + tk.E)
-            Timer.timesLabs.append(timeLab)
+        timeLab = tk.Label(self.timesFrame, text='', font=('TkDefaultFont', 18), padx=3, pady=3)  # add new time label
+        timeLab.bind('<Button-1>', self.editTime)
+        timeLab.bind('<Enter>', Timer.changeBackground)
+        timeLab.bind('<Leave>', Timer.changeBackground)
+        timeLab.grid(row=len(Timer.timesLabs) + 1, column=0, sticky=tk.W + tk.E)
+        Timer.timesLabs.append(timeLab)
 
         oldText = f'{timeObj.id}: {Timer.niceTime(Timer.solveFloat, Timer.precision)}'
+        maxChars = len(oldText)
 
         for label in Timer.timesLabs:  # update the labels saying the times
             prevText = label['text']
             label.configure(text=oldText)
+
+            if len(prevText) > maxChars:
+                maxChars = len(prevText)
+
             oldText = prevText
+
+        Timer.timesCanvas.configure(width=maxChars * 10)
 
         Timer.refreshAverages()
 
@@ -321,7 +357,7 @@ class Timer:
 
 def main():  # do something to create the times table if it is first time running the program
     root = tk.Tk()  # maybe like try open('solveTimes.db') before the sqlite connect or something
-    root.geometry('800x700')
+    root.geometry('850x700')
     root.title('PTimer GUI')
     Timer(root)
     root.mainloop()
