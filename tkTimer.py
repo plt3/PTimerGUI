@@ -4,6 +4,7 @@ from datetime import datetime
 from runTimer import session
 from models import TimeModel
 from editWindow import Edit
+from colorMap import colorThemes
 
 
 class Timer:
@@ -13,26 +14,31 @@ class Timer:
     solveStart = 0
     solveFloat = 0
     running = False
-    precision = 2  # anything greater than 6 makes no sense because microseconds
+    # user's choices are values below
+    precision = 2
+    color = 'green'
+    avg1 = ('average', 5)
+    avg2 = ('average', 12)  # make sure you can't do an average of < 4 otherwise refreshAverages will break
 
     def __init__(self, master):
         self.master = master
+        self.master.configure(background=colorThemes[Timer.color]['normal'])
         self.master.bind('<Key>', self.timeIt)  # key or space?
-        self.optsBut = tk.Button(self.master, text='Options', command=self.openOptions,
+        self.optsBut = tk.Button(self.master, text='Options', command=self.openOptions, bg='red',
                                  font=('TkDefaultFont', 18), padx=10, pady=10)
         self.optsBut.grid(row=0, column=0, padx=20, pady=20)
         self.makeScramble()
         self.scramLab = tk.Label(self.master, text=Timer.scram, font=('TkDefaultFont', 24),
-                                 borderwidth=1, relief='solid', padx=10, pady=10, width=40)
+                                 borderwidth=1, relief='solid', padx=10, pady=10, width=40, background=colorThemes[Timer.color]['dark'])
         self.scramLab.grid(row=0, column=1, pady=20)
         zeros = ''.join(['0' for i in range(Timer.precision)])
-        Timer.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 70))
+        Timer.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 70), background=colorThemes[Timer.color]['normal'])
         Timer.timeLabel.grid(row=1, column=1, pady=20)
 
         self.bigTimesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
 
-        self.timesTitle = tk.Label(self.bigTimesFrame, text='Times:', font=('TkDefaultFont', 24), pady=3)
-        self.timesTitle.pack()
+        self.timesTitle = tk.Label(self.bigTimesFrame, text='Times:', font=('TkDefaultFont', 24), pady=3, background=colorThemes[Timer.color]['dark'])
+        self.timesTitle.pack(fill='both')
 
         Timer.timesCanvas = tk.Canvas(self.bigTimesFrame, borderwidth=0, height=330)  # good height to hold 10 times
         self.timesFrame = tk.Frame(Timer.timesCanvas)
@@ -50,7 +56,7 @@ class Timer:
 
         for index, timeObj in enumerate(rawLast):
             labText = f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision, penalty=timeObj.penalty)}'
-            timeLab = tk.Label(self.timesFrame, text=labText, font=('TkDefaultFont', 18), padx=3, pady=3)
+            timeLab = tk.Label(self.timesFrame, text=labText, font=('TkDefaultFont', 18), padx=3, pady=3, background=colorThemes[Timer.color]['dark'])
             timeLab.bind('<Button-1>', self.editTime)
             timeLab.bind('<Enter>', Timer.changeBackground)
             timeLab.bind('<Leave>', Timer.changeBackground)
@@ -66,10 +72,10 @@ class Timer:
 
         self.averagesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
 
-        Timer.mo3Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24))
-        Timer.mo3Lab.pack(padx=6, pady=(6, 3))
-        Timer.ao5Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24))
-        Timer.ao5Lab.pack(padx=6, pady=(3, 6))
+        Timer.avg1Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24), background=colorThemes[Timer.color]['dark'], padx=6, pady=3)
+        Timer.avg1Lab.pack(fill='both')
+        Timer.avg2Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24), background=colorThemes[Timer.color]['dark'], padx=6, pady=3)
+        Timer.avg2Lab.pack(fill='both')
 
         Timer.refreshAverages()
         self.averagesFrame.grid(row=2, column=1)
@@ -101,41 +107,59 @@ class Timer:
 
     @staticmethod
     def refreshAverages():
-        lastFiveTimes = session.query(TimeModel).order_by(TimeModel.id.desc()).limit(5).all()
+        tup1, tup2 = Timer.avg1, Timer.avg2
+        maxToGet = max(tup1[1], tup2[1])
+        minToGet = min(tup1[1], tup2[1])
 
-        ao5Times = []
+        if tup1[1] > tup2[1]:
+            longest = tup1
+        else:
+            longest = tup2
 
-        for object in lastFiveTimes:
+        lastNTimes = session.query(TimeModel).order_by(TimeModel.id.desc()).limit(maxToGet).all()
+
+        mostTimes = []
+
+        for object in lastNTimes:
             if object.penalty == 'DNF':
-                ao5Times.append('DNF')
+                mostTimes.append('DNF')
             elif object.penalty == '+2':
-                ao5Times.append(object.time + 2)
+                mostTimes.append(object.time + 2)
             else:
-                ao5Times.append(object.time)
+                mostTimes.append(object.time)
 
-        mo3Times = ao5Times[:3]
-        ao5Times.sort(key=lambda v: (isinstance(v, str), v))
-        realAo5Times = ao5Times[1:4]
+        toCalculate = {}
 
-        for average, times, label in [('mo3', mo3Times, Timer.mo3Lab), ('ao5', realAo5Times, Timer.ao5Lab)]:
+        for tuple in [tup1, tup2]:
+            if tuple == longest:
+                toCalculate[tuple] = mostTimes
+            else:
+                toCalculate[tuple] = mostTimes[:minToGet]
+
+        for avg, times in toCalculate.items():
+            if avg[0] == 'average':
+                toCalculate[avg] = sorted(times, key=lambda v: (isinstance(v, str), v))[1:-1]
+
+        for tup, label in [(tup1, Timer.avg1Lab), (tup2, Timer.avg2Lab)]:
+            text = f'{tup[0][0]}o{tup[1]}'
+            times = toCalculate[tup]
             try:
-                avg = Timer.niceTime(sum(times) / 3, Timer.precision)
-                label.configure(text=f'{average}: {avg}')
-            except TypeError:
-                label.configure(text=f'{average}: DNF')
+                if len(lastNTimes) < tup[1]:
+                    label.configure(text=f'{text}: -')
+                    continue
 
-        if len(lastFiveTimes) < 5:
-            Timer.ao5Lab.configure(text='ao5: -')
-            if len(lastFiveTimes) < 3:
-                Timer.mo3Lab.configure(text='mo3: -')
+                avg = Timer.niceTime(sum(times) / len(times), Timer.precision)
+                label.configure(text=f'{text}: {avg}')
+            except TypeError:
+                label.configure(text=f'{text}: DNF')
 
     @staticmethod
     def changeBackground(event, static=False):  # highlight time cell when mouse is over it
         if not static:
-            if event.widget['background'] == 'White':
-                event.widget.configure(background='light gray')
+            if event.widget['background'] == colorThemes[Timer.color]['dark']:
+                event.widget.configure(background=colorThemes[Timer.color]['select'])
             else:
-                event.widget.configure(background='White')
+                event.widget.configure(background=colorThemes[Timer.color]['dark'])
 
     def openOptions(self):
         pass  # but like probably open up different window (so different class)

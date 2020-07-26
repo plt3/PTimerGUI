@@ -3,36 +3,38 @@ from functools import partial
 from tkinter import messagebox
 from runTimer import session
 from models import TimeModel
+from colorMap import colorThemes
 
 
 class Edit:
     def __init__(self, master, labText):
-        from tkTimer import Timer  # need this in every function to avod circuar import
+        from tkTimer import Timer  # need this in every function to avoid circular import
         self.master = master
+        self.master.configure(background=colorThemes[Timer.color]['normal'])
         self.master.geometry('580x320')
         self.master.title('Add Penalty')
 
         self.timeId = int(labText[:labText.index(':')])
         self.timeObj = session.query(TimeModel).filter_by(id=self.timeId).first()
 
-        self.idLab = tk.Label(self.master, text=f'Solve {self.timeObj.id}:', font=('TkDefaultFont', 18))
+        self.idLab = tk.Label(self.master, text=f'Solve {self.timeObj.id}:', font=('TkDefaultFont', 18), background=colorThemes[Timer.color]['normal'])
         self.idLab.pack(pady=(10, 0))
-        self.timeLab = tk.Label(self.master, text=Timer.niceTime(self.timeObj.time, Timer.precision, penalty=self.timeObj.penalty, dnfTime=True), font=('TkDefaultFont', 30), pady=20)
+        self.timeLab = tk.Label(self.master, text=Timer.niceTime(self.timeObj.time, Timer.precision, penalty=self.timeObj.penalty, dnfTime=True), font=('TkDefaultFont', 30), pady=20, background=colorThemes[Timer.color]['normal'])
         self.timeLab.pack()
-        self.scramLab = tk.Label(self.master, text=f'Scramble: {self.timeObj.scramble}', font=('TkDefaultFont', 18))
+        self.scramLab = tk.Label(self.master, text=f'Scramble: {self.timeObj.scramble}', font=('TkDefaultFont', 18), background=colorThemes[Timer.color]['normal'])
         self.scramLab.pack()
         niceDate = self.timeObj.date.strftime('%m-%d-%Y %H:%M:%S')
-        self.dateLab = tk.Label(self.master, text=f'Date: {niceDate}', font=('TkDefaultFont', 18))
+        self.dateLab = tk.Label(self.master, text=f'Date: {niceDate}', font=('TkDefaultFont', 18), background=colorThemes[Timer.color]['normal'])
         self.dateLab.pack(pady=(10, 0))
 
         self.penaltyFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
-        self.penaltyLab = tk.Label(self.penaltyFrame, text='Penalty:', font=('TkDefaultFont', 18), padx=10, pady=10)
+        self.penaltyLab = tk.Label(self.penaltyFrame, text='Penalty:', font=('TkDefaultFont', 18), padx=10, pady=10, background=colorThemes[Timer.color]['dark'])
         self.penaltyLab.grid(row=0, column=0)
 
         for index, penalty in enumerate(['OK', '+2', 'DNF']):
-            penLab = tk.Label(self.penaltyFrame, text=penalty, font=('TkDefaultFont', 18), padx=5, pady=5)
+            penLab = tk.Label(self.penaltyFrame, text=penalty, font=('TkDefaultFont', 18), padx=5, pady=5, background=colorThemes[Timer.color]['dark'])
             if penalty == self.timeObj.penalty:
-                penLab.configure(background='light gray')
+                penLab.configure(background=colorThemes[Timer.color]['select'])
                 penLab.bind('<Enter>', partial(Timer.changeBackground, static=True))
                 penLab.bind('<Leave>', partial(Timer.changeBackground, static=True))
             else:
@@ -44,7 +46,7 @@ class Edit:
 
         self.penaltyFrame.pack(pady=(10, 20))
 
-        self.bottomFrame = tk.Frame(self.master)
+        self.bottomFrame = tk.Frame(self.master, background=colorThemes[Timer.color]['normal'])
         self.deleteButton = tk.Button(self.bottomFrame, text='Delete solve', font=('TkDefaultFont', 18), padx=5, pady=5, command=self.deleteSolve)
         self.deleteButton.grid(row=0, column=0, padx=(0, 10))
         self.exitButton = tk.Button(self.bottomFrame, text='Done', font=('TkDefaultFont', 18), padx=5, pady=5, command=self.master.destroy)
@@ -76,11 +78,11 @@ class Edit:
         from tkTimer import Timer
         for widget in self.penaltyFrame.grid_slaves():
             if widget['text'] != 'Penalty:':
-                widget.configure(background='White')
+                widget.configure(background=colorThemes[Timer.color]['dark'])
                 widget.bind('<Enter>', Timer.changeBackground)
                 widget.bind('<Leave>', Timer.changeBackground)
 
-        event.widget.configure(background='light gray')
+        event.widget.configure(background=colorThemes[Timer.color]['select'])
         event.widget.bind('<Enter>', partial(Timer.changeBackground, static=True))
         event.widget.bind('<Leave>', partial(Timer.changeBackground, static=True))
 
