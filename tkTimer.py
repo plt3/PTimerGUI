@@ -2,12 +2,14 @@ import tkinter as tk
 import random
 from datetime import datetime
 from runTimer import session
-from models import TimeModel
+from models import TimeModel, PreferencesModel
 from editWindow import Edit
+from optionsWindow import Options
 from colorMap import colorThemes
 
 
 class Timer:
+    userChoice = session.query(PreferencesModel).first()
     timesLabs = []
     timeLabel = ''
     scram = ''
@@ -15,10 +17,10 @@ class Timer:
     solveFloat = 0
     running = False
     # user's choices are values below
-    precision = 2
-    color = 'green'
-    avg1 = ('average', 5)
-    avg2 = ('average', 12)  # make sure you can't do an average of < 4 otherwise refreshAverages will break
+    precision = userChoice.precision
+    color = userChoice.colorTheme
+    avg1 = userChoice.avg1
+    avg2 = userChoice.avg2
 
     def __init__(self, master):
         self.master = master
@@ -107,7 +109,10 @@ class Timer:
 
     @staticmethod
     def refreshAverages():
-        tup1, tup2 = Timer.avg1, Timer.avg2
+        tup1 = (Timer.avg1[0], int(Timer.avg1[2:]))
+        tup2 = (Timer.avg2[0], int(Timer.avg2[2:]))
+
+        # tup1, tup2 = Timer.avg1, Timer.avg2
         maxToGet = max(tup1[1], tup2[1])
         minToGet = min(tup1[1], tup2[1])
 
@@ -137,11 +142,11 @@ class Timer:
                 toCalculate[tuple] = mostTimes[:minToGet]
 
         for avg, times in toCalculate.items():
-            if avg[0] == 'average':
+            if avg[0] == 'a':
                 toCalculate[avg] = sorted(times, key=lambda v: (isinstance(v, str), v))[1:-1]
 
-        for tup, label in [(tup1, Timer.avg1Lab), (tup2, Timer.avg2Lab)]:
-            text = f'{tup[0][0]}o{tup[1]}'
+        for text, tup, label in [(Timer.avg1, tup1, Timer.avg1Lab), (Timer.avg2, tup2, Timer.avg2Lab)]:
+            # text = f'{tup[0][0]}o{tup[1]}'
             times = toCalculate[tup]
             try:
                 if len(lastNTimes) < tup[1]:
@@ -162,7 +167,9 @@ class Timer:
                 event.widget.configure(background=colorThemes[Timer.color]['dark'])
 
     def openOptions(self):
-        pass  # but like probably open up different window (so different class)
+        self.optionsWindow = tk.Toplevel(self.master)
+        self.optionsApp = Options(self.optionsWindow)
+        # but like probably open up different window (so different class)
         # make these choices register in the db so that they are saved from session to session
         # number precision, color theme, timer font, which averages to display
         # export to/import from csv (or even to/from cstimer export)
@@ -194,7 +201,7 @@ class Timer:
         session.add(timeObj)  # add time to database
         session.commit()
 
-        timeLab = tk.Label(self.timesFrame, text='', font=('TkDefaultFont', 18), padx=3, pady=3)  # add new time label
+        timeLab = tk.Label(self.timesFrame, text='', font=('TkDefaultFont', 18), padx=3, pady=3, background=colorThemes[Timer.color]['dark'])  # add new time label
         timeLab.bind('<Button-1>', self.editTime)
         timeLab.bind('<Enter>', Timer.changeBackground)
         timeLab.bind('<Leave>', Timer.changeBackground)
