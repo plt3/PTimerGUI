@@ -66,12 +66,17 @@ class Options:
         self.precision.grid(row=0, column=1)
         self.precisionFrame.grid(row=2, column=0, sticky=tk.W)
 
-        self.submit = tk.Button(self.optionsFrame, text='Submit', command=self.submitChanges, font=('TkDefaultFont', 14), highlightthickness=0, padx=3, pady=3, background=colorThemes[Timer.color]['normal'])
-        self.submit.grid(row=3, column=0, pady=(20, 0))
+        self.buttonsFrame = tk.Frame(self.optionsFrame, background=colorThemes[Timer.color]['normal'])
+        self.submit = tk.Button(self.buttonsFrame, text='Submit', command=self.submitChanges, font=('TkDefaultFont', 18), highlightthickness=0, padx=5, pady=5, background=colorThemes[Timer.color]['normal'])
+        self.exit = tk.Button(self.buttonsFrame, text='Exit', font=('TkDefaultFont', 18), highlightthickness=0, padx=5, pady=5, command=self.master.destroy)
+        self.submit.pack(side='left')
+        self.exit.pack(side='left', padx=(20, 0))
+        self.buttonsFrame.grid(row=3, column=0, pady=(10, 0))
 
         self.optionsFrame.pack(pady=(30, 0))
 
     def submitChanges(self):
+        from tkTimer import Timer
         vals = [self.colorVar.get(), f'{self.avg1Var.get()}o{self.num1.get()}', f'{self.avg2Var.get()}o{self.num2.get()}', self.precision.get()]
 
         for attribute, value in zip(['colorTheme', 'avg1', 'avg2', 'precision'], vals):
@@ -79,4 +84,16 @@ class Options:
 
         session.commit()
 
-        self.master.destroy()
+        Timer.refreshAll()
+        self.refreshOptions()
+
+    def refreshOptions(self):
+        from tkTimer import Timer
+        self.master.configure(background=colorThemes[Timer.color]['normal'])
+        self.optionsFrame.configure(background=colorThemes[Timer.color]['normal'])
+        for widget in self.optionsFrame.grid_slaves():
+            widget.configure(background=colorThemes[Timer.color]['normal'])
+            for subWidget in widget.pack_slaves():
+                subWidget.configure(background=colorThemes[Timer.color]['normal'])
+            for subWidget in widget.grid_slaves():
+                subWidget.configure(background=colorThemes[Timer.color]['normal'])

@@ -23,21 +23,21 @@ class Timer:
     avg2 = userChoice.avg2
 
     def __init__(self, master):
-        self.master = master
-        self.master.configure(background=colorThemes[Timer.color]['normal'])
-        self.master.bind('<Key>', self.timeIt)  # key or space?
-        self.optsBut = tk.Button(self.master, text='Options', command=self.openOptions, bg='red',
+        Timer.master = master
+        Timer.master.configure(background=colorThemes[Timer.color]['normal'])
+        Timer.master.bind('<Key>', self.timeIt)  # key or space?
+        self.optsBut = tk.Button(Timer.master, text='Options', command=self.openOptions,
                                  font=('TkDefaultFont', 18), padx=10, pady=10)
         self.optsBut.grid(row=0, column=0, padx=20, pady=20)
         self.makeScramble()
-        self.scramLab = tk.Label(self.master, text=Timer.scram, font=('TkDefaultFont', 24),
+        self.scramLab = tk.Label(Timer.master, text=Timer.scram, font=('TkDefaultFont', 24),
                                  borderwidth=1, relief='solid', padx=10, pady=10, width=40, background=colorThemes[Timer.color]['dark'])
         self.scramLab.grid(row=0, column=1, pady=20)
         zeros = ''.join(['0' for i in range(Timer.precision)])
-        Timer.timeLabel = tk.Label(self.master, text=f'0.{zeros}', font=('TkDefaultFont', 70), background=colorThemes[Timer.color]['normal'])
+        Timer.timeLabel = tk.Label(Timer.master, text=f'0.{zeros}', font=('TkDefaultFont', 70), background=colorThemes[Timer.color]['normal'])
         Timer.timeLabel.grid(row=1, column=1, pady=20)
 
-        self.bigTimesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
+        self.bigTimesFrame = tk.Frame(Timer.master, borderwidth=1, relief='solid')
 
         self.timesTitle = tk.Label(self.bigTimesFrame, text='Times:', font=('TkDefaultFont', 24), pady=3, background=colorThemes[Timer.color]['dark'])
         self.timesTitle.pack(fill='both')
@@ -72,7 +72,7 @@ class Timer:
 
         self.bigTimesFrame.grid(row=1, column=0, padx=(10, 0))
 
-        self.averagesFrame = tk.Frame(self.master, borderwidth=1, relief='solid')
+        self.averagesFrame = tk.Frame(Timer.master, borderwidth=1, relief='solid')
 
         Timer.avg1Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24), background=colorThemes[Timer.color]['dark'], padx=6, pady=3)
         Timer.avg1Lab.pack(fill='both')
@@ -86,14 +86,50 @@ class Timer:
         Timer.timesCanvas.configure(scrollregion=Timer.timesCanvas.bbox('all'))
 
     def editTime(self, event):
-        self.editWindow = tk.Toplevel(self.master)
+        self.editWindow = tk.Toplevel(Timer.master)
         self.editApp = Edit(self.editWindow, event.widget['text'])
+
+    @staticmethod
+    def refreshAll():
+        Timer.userChoice = session.query(PreferencesModel).first()
+        Timer.precision = Timer.userChoice.precision
+        Timer.color = Timer.userChoice.colorTheme
+        Timer.avg1 = Timer.userChoice.avg1
+        Timer.avg2 = Timer.userChoice.avg2
+
+        Timer.refreshTimes()
+        Timer.refreshAverages()
+
+        Timer.master.configure(background=colorThemes[Timer.color]['normal'])
+
+        for widget in Timer.master.grid_slaves():
+            if widget.winfo_class() == 'Frame':
+                for subWidget in widget.pack_slaves():
+                    if subWidget.winfo_class() == 'Canvas':
+                        for subSubWidget in list(subWidget.children.items())[0][1].grid_slaves():
+                            subSubWidget.configure(background=colorThemes[Timer.color]['dark'])
+                    else:
+                        subWidget.configure(background=colorThemes[Timer.color]['dark'])
+            else:
+                try:
+                    float(widget['text'])
+                    widget.configure(background=colorThemes[Timer.color]['normal'])
+                except Exception:
+                    if widget['text'].endswith('+') or widget['text'] == 'DNF':
+                        widget.configure(background=colorThemes[Timer.color]['normal'])
+                    else:
+                        widget.configure(background=colorThemes[Timer.color]['dark'])
 
     @staticmethod
     def refreshTimes():
         rawLast = session.query(TimeModel).order_by(TimeModel.id.desc()).all()
         zeros = ''.join(['0' for i in range(Timer.precision)])
-        if Timer.timeLabel['text'] != f'0.{zeros}':
+        try:
+            if float(Timer.timeLabel['text']):
+                Timer.timeLabel.configure(text=Timer.niceTime(rawLast[0].time, precision=Timer.precision, penalty=rawLast[0].penalty))
+            else:
+                Timer.timeLabel.configure(text=f'0.{zeros}')
+        except ValueError:
             Timer.timeLabel.configure(text=Timer.niceTime(rawLast[0].time, precision=Timer.precision, penalty=rawLast[0].penalty))
 
         maxChars = 8
@@ -112,7 +148,6 @@ class Timer:
         tup1 = (Timer.avg1[0], int(Timer.avg1[2:]))
         tup2 = (Timer.avg2[0], int(Timer.avg2[2:]))
 
-        # tup1, tup2 = Timer.avg1, Timer.avg2
         maxToGet = max(tup1[1], tup2[1])
         minToGet = min(tup1[1], tup2[1])
 
@@ -146,7 +181,6 @@ class Timer:
                 toCalculate[avg] = sorted(times, key=lambda v: (isinstance(v, str), v))[1:-1]
 
         for text, tup, label in [(Timer.avg1, tup1, Timer.avg1Lab), (Timer.avg2, tup2, Timer.avg2Lab)]:
-            # text = f'{tup[0][0]}o{tup[1]}'
             times = toCalculate[tup]
             try:
                 if len(lastNTimes) < tup[1]:
@@ -167,12 +201,8 @@ class Timer:
                 event.widget.configure(background=colorThemes[Timer.color]['dark'])
 
     def openOptions(self):
-        self.optionsWindow = tk.Toplevel(self.master)
+        self.optionsWindow = tk.Toplevel(Timer.master)
         self.optionsApp = Options(self.optionsWindow)
-        # but like probably open up different window (so different class)
-        # make these choices register in the db so that they are saved from session to session
-        # number precision, color theme, timer font, which averages to display
-        # export to/import from csv (or even to/from cstimer export)
 
     def makeScramble(self):  # generate random move 3x3 scramble
         opposites = {'U': 'D', 'F': 'B', 'L': 'R', 'D': 'U', 'B': 'F', 'R': 'L'}
@@ -269,14 +299,14 @@ class Timer:
             if event:  # to start timer
                 Timer.solveStart = datetime.now()
                 Timer.running = True
-                self.master.after(10, self.timeIt)
+                Timer.master.after(10, self.timeIt)
         else:
             elapsed = datetime.now() - Timer.solveStart
             timeFloat = elapsed.seconds + elapsed.microseconds / 1000000
 
             if not event:  # for time to update itself during timing
                 Timer.timeLabel.configure(text=Timer.niceTime(timeFloat, Timer.precision))
-                self.master.after(10, self.timeIt)
+                Timer.master.after(10, self.timeIt)
             else:  # to stop timer
                 Timer.solveFloat = timeFloat
                 Timer.timeLabel.configure(text=Timer.niceTime(Timer.solveFloat, Timer.precision))

@@ -65,8 +65,10 @@ class Edit:
             session.commit()
             self.master.destroy()
 
+            zeros = ''.join(['0' for i in range(Timer.precision)])
+
             if not aboveTimes:
-                Timer.timeLabel.configure(text='0.00')
+                Timer.timeLabel.configure(text=f'0.{zeros}')
 
             Timer.timesLabs[-1].destroy()  # shrink the times list
             del Timer.timesLabs[-1]
