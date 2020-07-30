@@ -11,7 +11,6 @@ session = DBSession()
 if __name__ == '__main__':
     from tkTimer import Timer  # need to check that the database exists first to create the tables if need be
     root = tk.Tk()  # maybe like try open('solveTimes.db') before the sqlite connect or something
-    root.geometry('850x700')
     root.title('PTimer GUI')
     Timer(root)
     root.mainloop()

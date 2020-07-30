@@ -5,12 +5,14 @@ from runTimer import session
 from models import TimeModel, PreferencesModel
 from editWindow import Edit
 from optionsWindow import Options
+from averagesWindow import Average
 from colorMap import colorThemes
 
 
 class Timer:
     userChoice = session.query(PreferencesModel).first()
     timesLabs = []
+    avgsLabs = []
     timeLabel = ''
     scram = ''
     solveStart = 0
@@ -32,7 +34,7 @@ class Timer:
         self.makeScramble()
         self.scramLab = tk.Label(Timer.master, text=Timer.scram, font=('TkDefaultFont', 24),
                                  borderwidth=1, relief='solid', padx=10, pady=10, width=40, background=colorThemes[Timer.color]['dark'])
-        self.scramLab.grid(row=0, column=1, pady=20)
+        self.scramLab.grid(row=0, column=1, padx=(0, 40), pady=20)
         zeros = ''.join(['0' for i in range(Timer.precision)])
         Timer.timeLabel = tk.Label(Timer.master, text=f'0.{zeros}', font=('TkDefaultFont', 70), background=colorThemes[Timer.color]['normal'])
         Timer.timeLabel.grid(row=1, column=1, pady=20)
@@ -42,23 +44,23 @@ class Timer:
         self.timesTitle = tk.Label(self.bigTimesFrame, text='Times:', font=('TkDefaultFont', 24), pady=3, background=colorThemes[Timer.color]['dark'])
         self.timesTitle.pack(fill='both')
 
-        Timer.timesCanvas = tk.Canvas(self.bigTimesFrame, borderwidth=0, height=330)  # good height to hold 10 times
-        self.timesFrame = tk.Frame(Timer.timesCanvas)
+        Timer.timesCanvas = tk.Canvas(self.bigTimesFrame, borderwidth=0, height=330, background=colorThemes[Timer.color]['dark'])  # good height to hold 10 times
+        Timer.timesFrame = tk.Frame(Timer.timesCanvas)
         self.vsb = tk.Scrollbar(self.bigTimesFrame, orient='vertical', command=Timer.timesCanvas.yview)
         Timer.timesCanvas.configure(yscrollcommand=self.vsb.set)
 
         self.vsb.pack(side='right', fill='y')
         Timer.timesCanvas.pack()
-        Timer.timesCanvas.create_window((0, 0), window=self.timesFrame, anchor='nw', tags='self.timesFrame')
+        Timer.timesCanvas.create_window((0, 0), window=Timer.timesFrame, anchor='nw', tags='Timer.timesFrame')
 
-        self.timesFrame.bind('<Configure>', self.onFrameConfigure)
+        Timer.timesFrame.bind('<Configure>', self.onFrameConfigure)
 
         rawLast = session.query(TimeModel).order_by(TimeModel.id.desc()).all()
         maxChars = 8  # good start to have 'times' label fit well
 
         for index, timeObj in enumerate(rawLast):
             labText = f'{timeObj.id}: {Timer.niceTime(timeObj.time, Timer.precision, penalty=timeObj.penalty)}'
-            timeLab = tk.Label(self.timesFrame, text=labText, font=('TkDefaultFont', 18), padx=3, pady=3, background=colorThemes[Timer.color]['dark'])
+            timeLab = tk.Label(Timer.timesFrame, text=labText, font=('TkDefaultFont', 18), padx=3, pady=3, background=colorThemes[Timer.color]['dark'])
             timeLab.bind('<Button-1>', self.editTime)
             timeLab.bind('<Enter>', Timer.changeBackground)
             timeLab.bind('<Leave>', Timer.changeBackground)
@@ -74,13 +76,13 @@ class Timer:
 
         self.averagesFrame = tk.Frame(Timer.master, borderwidth=1, relief='solid')
 
-        Timer.avg1Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24), background=colorThemes[Timer.color]['dark'], padx=6, pady=3)
-        Timer.avg1Lab.pack(fill='both')
-        Timer.avg2Lab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24), background=colorThemes[Timer.color]['dark'], padx=6, pady=3)
-        Timer.avg2Lab.pack(fill='both')
+        for i in range(2):
+            quickAvgLab = tk.Label(self.averagesFrame, text='', font=('TkDefaultFont', 24), background=colorThemes[Timer.color]['dark'], padx=6, pady=3)
+            quickAvgLab.pack(fill='both')
+            Timer.avgsLabs.append(quickAvgLab)
 
         Timer.refreshAverages()
-        self.averagesFrame.grid(row=2, column=1)
+        self.averagesFrame.grid(row=2, column=1, pady=(0, 40))
 
     def onFrameConfigure(self, event):
         Timer.timesCanvas.configure(scrollregion=Timer.timesCanvas.bbox('all'))
@@ -88,6 +90,11 @@ class Timer:
     def editTime(self, event):
         self.editWindow = tk.Toplevel(Timer.master)
         self.editApp = Edit(self.editWindow, event.widget['text'])
+
+    @staticmethod
+    def showAverage(event):
+        Timer.averagesWindow = tk.Toplevel(Timer.master)
+        Timer.editApp = Average(Timer.averagesWindow, event.widget['text'])
 
     @staticmethod
     def refreshAll():
@@ -108,8 +115,7 @@ class Timer:
                     if subWidget.winfo_class() == 'Canvas':
                         for subSubWidget in list(subWidget.children.items())[0][1].grid_slaves():
                             subSubWidget.configure(background=colorThemes[Timer.color]['dark'])
-                    else:
-                        subWidget.configure(background=colorThemes[Timer.color]['dark'])
+                    subWidget.configure(background=colorThemes[Timer.color]['dark'])
             else:
                 try:
                     float(widget['text'])
@@ -180,17 +186,24 @@ class Timer:
             if avg[0] == 'a':
                 toCalculate[avg] = sorted(times, key=lambda v: (isinstance(v, str), v))[1:-1]
 
-        for text, tup, label in [(Timer.avg1, tup1, Timer.avg1Lab), (Timer.avg2, tup2, Timer.avg2Lab)]:
+        for text, tup, label in [(Timer.avg1, tup1, Timer.avgsLabs[0]), (Timer.avg2, tup2, Timer.avgsLabs[1])]:
             times = toCalculate[tup]
             try:
                 if len(lastNTimes) < tup[1]:
                     label.configure(text=f'{text}: -')
+                    label.unbind('<Button-1>')
+                    label.unbind('Enter>')
+                    label.unbind('<Leave>')
                     continue
 
                 avg = Timer.niceTime(sum(times) / len(times), Timer.precision)
                 label.configure(text=f'{text}: {avg}')
             except TypeError:
                 label.configure(text=f'{text}: DNF')
+
+            label.bind('<Button-1>', Timer.showAverage)  # only clickable if average is defined
+            label.bind('<Enter>', Timer.changeBackground)
+            label.bind('<Leave>', Timer.changeBackground)
 
     @staticmethod
     def changeBackground(event, static=False):  # highlight time cell when mouse is over it
@@ -231,7 +244,7 @@ class Timer:
         session.add(timeObj)  # add time to database
         session.commit()
 
-        timeLab = tk.Label(self.timesFrame, text='', font=('TkDefaultFont', 18), padx=3, pady=3, background=colorThemes[Timer.color]['dark'])  # add new time label
+        timeLab = tk.Label(Timer.timesFrame, text='', font=('TkDefaultFont', 18), padx=3, pady=3, background=colorThemes[Timer.color]['dark'])  # add new time label
         timeLab.bind('<Button-1>', self.editTime)
         timeLab.bind('<Enter>', Timer.changeBackground)
         timeLab.bind('<Leave>', Timer.changeBackground)

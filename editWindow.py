@@ -11,7 +11,6 @@ class Edit:
         from tkTimer import Timer  # need this in every function to avoid circular import
         self.master = master
         self.master.configure(background=colorThemes[Timer.color]['normal'])
-        self.master.geometry('580x320')
         self.master.title('Add Penalty')
 
         self.timeId = int(labText[:labText.index(':')])
@@ -22,7 +21,7 @@ class Edit:
         self.timeLab = tk.Label(self.master, text=Timer.niceTime(self.timeObj.time, Timer.precision, penalty=self.timeObj.penalty, dnfTime=True), font=('TkDefaultFont', 30), pady=20, background=colorThemes[Timer.color]['normal'])
         self.timeLab.pack()
         self.scramLab = tk.Label(self.master, text=f'Scramble: {self.timeObj.scramble}', font=('TkDefaultFont', 18), background=colorThemes[Timer.color]['normal'])
-        self.scramLab.pack()
+        self.scramLab.pack(padx=20)
         niceDate = self.timeObj.date.strftime('%m-%d-%Y %H:%M:%S')
         self.dateLab = tk.Label(self.master, text=f'Date: {niceDate}', font=('TkDefaultFont', 18), background=colorThemes[Timer.color]['normal'])
         self.dateLab.pack(pady=(10, 0))
@@ -51,7 +50,7 @@ class Edit:
         self.deleteButton.grid(row=0, column=0, padx=(0, 10))
         self.exitButton = tk.Button(self.bottomFrame, text='Done', font=('TkDefaultFont', 18), padx=5, pady=5, command=self.master.destroy)
         self.exitButton.grid(row=0, column=1)
-        self.bottomFrame.pack()
+        self.bottomFrame.pack(pady=(0, 20))
 
     def deleteSolve(self):
         from tkTimer import Timer

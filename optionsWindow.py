@@ -1,6 +1,7 @@
 import tkinter as tk
 from runTimer import session
-from models import PreferencesModel
+from tkinter import messagebox
+from models import PreferencesModel, TimeModel
 from colorMap import colorThemes
 
 
@@ -9,7 +10,6 @@ class Options:
         from tkTimer import Timer
         self.master = master
         self.master.configure(background=colorThemes[Timer.color]['normal'])
-        self.master.geometry('500x280')
         self.master.title('Options')
 
         self.currentChoice = session.query(PreferencesModel).first()
@@ -69,11 +69,13 @@ class Options:
         self.buttonsFrame = tk.Frame(self.optionsFrame, background=colorThemes[Timer.color]['normal'])
         self.submit = tk.Button(self.buttonsFrame, text='Submit', command=self.submitChanges, font=('TkDefaultFont', 18), highlightthickness=0, padx=5, pady=5, background=colorThemes[Timer.color]['normal'])
         self.exit = tk.Button(self.buttonsFrame, text='Exit', font=('TkDefaultFont', 18), highlightthickness=0, padx=5, pady=5, command=self.master.destroy)
+        self.deleteAll = tk.Button(self.buttonsFrame, text='Reset session', font=('TkDefaultFont', 18), highlightthickness=0, padx=5, pady=5, command=self.dropAllTimes)
         self.submit.pack(side='left')
         self.exit.pack(side='left', padx=(20, 0))
-        self.buttonsFrame.grid(row=3, column=0, pady=(10, 0))
+        self.deleteAll.pack(side='right')
+        self.buttonsFrame.grid(row=3, column=0, sticky=tk.W + tk.E, pady=(10, 0))
 
-        self.optionsFrame.pack(pady=(30, 0))
+        self.optionsFrame.pack(padx=20, pady=20)
 
     def submitChanges(self):
         from tkTimer import Timer
@@ -97,3 +99,24 @@ class Options:
                 subWidget.configure(background=colorThemes[Timer.color]['normal'])
             for subWidget in widget.grid_slaves():
                 subWidget.configure(background=colorThemes[Timer.color]['normal'])
+
+    def dropAllTimes(self):
+        from tkTimer import Timer
+        confirmReset = messagebox.askokcancel('Confirm reset', 'Are you sure you want to delete all solves in this session?')
+        if confirmReset:
+            session.query(TimeModel).delete()
+            session.commit()
+            zeros = ''.join(['0' for i in range(Timer.precision)])
+            Timer.timeLabel.configure(text=f'0.{zeros}')
+
+            for label in Timer.timesLabs:
+                label.destroy()
+
+            Timer.timesLabs.clear()
+
+            Timer.refreshTimes()
+            Timer.refreshAverages()
+
+            Timer.timesFrame.configure(background=colorThemes[Timer.color]['dark'])
+
+            self.master.destroy()
