@@ -18,3 +18,6 @@ class PreferencesModel(Base):
     avg1 = Column(String(10), nullable=False, default='ao5')
     avg2 = Column(String(10), nullable=False, default='ao12')
     precision = Column(Integer, nullable=False, default=2)
+
+
+meta = Base.metadata
